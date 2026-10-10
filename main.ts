@@ -1,7 +1,3 @@
-/**
- * Custom blocks for decoding and managing configuration settings
- */
-//% color="#54527D" icon="\uf1de" block="Settings Decoder"
 namespace settingsDecoder {
 
     // Internal tracker key prefix to identify what data type is stored in the entry
@@ -124,10 +120,10 @@ namespace settingsDecoder {
             let imgHeight = dimensions[1];
             let decodedImg = image.create(imgWidth, imgHeight);
 
-            for (let y = 0; y < imgHeight; y++) {
-                for (let x = 0; x < imgWidth; x++) {
-                    let idx = (y * imgWidth) + x;
-                    if (idx < colors.length) decodedImg.setPixel(x, y, colors[idx]);
+            for (let y2 = 0; y2 < imgHeight; y2++) {
+                for (let x2 = 0; x2 < imgWidth; x2++) {
+                    let idx = (y2 * imgWidth) + x2;
+                    if (idx < colors.length) decodedImg.setPixel(x2, y2, colors[idx]);
                 }
             }
             return decodedImg;
