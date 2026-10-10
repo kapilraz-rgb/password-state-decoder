@@ -1,0 +1,25 @@
+{
+    "name": "PASSWORD STATE DECODER",
+    "description": "",
+    "dependencies": {
+        "device": "*",
+        "settings-blocks": "github:microsoft/pxt-settings-blocks#v1.0.0"
+    },
+    "files": [
+        "main.blocks",
+        "main.ts",
+        "README.md",
+        "assets.json"
+    ],
+    "testFiles": [
+        "test.ts"
+    ],
+    "targetVersions": {
+        "target": "4.1.25",
+        "targetId": "arcade"
+    },
+    "supportedTargets": [
+        "arcade"
+    ],
+    "preferredEditor": "tsprj"
+}
