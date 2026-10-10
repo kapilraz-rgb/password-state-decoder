@@ -1,10 +1,9 @@
 /**
- * Custom blocks for decoding and managing configuration settings
+ * Custom blocks for decoding and managing configuration settings without crashes
  */
 //% color="#54527D" icon="\uf1de" block="Settings Decoder"
 namespace settingsDecoder {
 
-    // Internal tracker key prefix to identify what data type is stored in the entry
     const TYPE_PREFIX = "sd_type_";
 
     // ==========================================
@@ -44,20 +43,17 @@ namespace settingsDecoder {
     //% name.defl="myArray"
     export function encodeAnyArray(name: string, list: any[]): void {
         if (!name || !list) return;
-
         settings.writeString(TYPE_PREFIX + name, "array");
-
         let flatStrings: string[] = [];
         for (let i = 0; i < list.length; i++) {
             flatStrings.push("" + list[i]);
         }
-
         let flatString = flatStrings.join("||sd_split||");
         settings.writeString("sd_arr_" + name, flatString);
     }
 
     /**
-     * Encodes the active tilemap currently running on the game screen into storage safely
+     * Encodes the active tilemap currently running on the game screen into storage safely using background chunk streaming
      * @param name The identification key name for this tilemap encode, eg: "currentLevel"
      */
     //% group="Encoders"
@@ -69,26 +65,30 @@ namespace settingsDecoder {
         if (!scene || !scene.tileMap) return;
 
         let activeMap = scene.tileMap;
-        // Read raw layout tile map safely using bypass bracket notation
-        let mapImage: Image = (activeMap as any)["data"] || (activeMap as any)["_data"];
-        if (!mapImage) return;
+        let mapWidth = (activeMap as any)["data"] ? (activeMap as any)["data"].width : 16;
+        let mapHeight = (activeMap as any)["data"] ? (activeMap as any)["data"].height : 16;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
-        settings.writeNumberArray("sd_tm_dim_" + name, [mapImage.width, mapImage.height]);
+        settings.writeNumberArray("sd_tm_dim_" + name, [mapWidth, mapHeight]);
 
-        // Compress numerical IDs into a text stream to bypass memory allocation array crash limits
-        let hexBuilder = "";
-        for (let y = 0; y < mapImage.height; y++) {
-            for (let x = 0; x < mapImage.width; x++) {
-                let tileId = mapImage.getPixel(x, y);
-                // Pads values to a strict 2-character hex slot (Supports tile IDs up to 255)
-                let hexStr = "00" + tileId.toString();
-                hexBuilder += hexStr.substr(hexStr.length - 2, 2);
+        control.runInParallel(function () {
+            let chunkCount = 0;
+            for (let y = 0; y < mapHeight; y++) {
+                let rowBuf = control.createBuffer(mapWidth);
+                for (let x = 0; x < mapWidth; x++) {
+                    let tile = activeMap.getTile(x, y);
+                    let tileImg = tiles.getTileImage(tile);                    let id = 0;
+                    if (tileImg) {
+                        id = tileImg.getPixel(0, 0) + (tileImg.width % 16);
+                    }
+                    rowBuf.setUint8(x, id & 0xFF);
+                }
+                settings.writeBuffer("sd_tm_b" + chunkCount + "_" + name, rowBuf);
+                chunkCount++;
+                pause(6);
             }
-            // Memory release valve to avoid locking up hardware frame loops
-            pause(1);
-        }
-        settings.writeString("sd_tm_hex_" + name, hexBuilder);
+            settings.writeNumber("sd_tm_chunks_" + name, chunkCount);
+        });
     }
 
     /**
@@ -102,32 +102,30 @@ namespace settingsDecoder {
     //% name.defl="myTilemap"
     export function encodeTilemap(name: string, tilemapData: tiles.TileMapData): void {
         if (!name || !tilemapData) return;
-
-        let mapImage: Image = (tilemapData as any)["data"] || (tilemapData as any)["_data"] || (tilemapData as any)["layers"]();
+        let mapImage: Image = (tilemapData as any)["data"] || (tilemapData as any)["_data"];
         if (!mapImage) return;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
         settings.writeNumberArray("sd_tm_dim_" + name, [mapImage.width, mapImage.height]);
 
-        let hexBuilder = "";
-        for (let y = 0; y < mapImage.height; y++) {
-            for (let x = 0; x < mapImage.width; x++) {
-                let tileId = mapImage.getPixel(x, y);
-                let hexStr = "00" + tileId.toString();
-                hexBuilder += hexStr.substr(hexStr.length - 2, 2);
+        control.runInParallel(function () {
+            let chunkCount = 0;
+            for (let y = 0; y < mapImage.height; y++) {
+                let rowBuf = control.createBuffer(mapImage.width);
+                for (let x = 0; x < mapImage.width; x++) {
+                    rowBuf.setUint8(x, mapImage.getPixel(x, y) & 0xFF);
+                }
+                settings.writeBuffer("sd_tm_b" + chunkCount + "_" + name, rowBuf);
+                chunkCount++;
+                pause(6);
             }
-            pause(1);
-        }
-        settings.writeString("sd_tm_hex_" + name, hexBuilder);
+            settings.writeNumber("sd_tm_chunks_" + name, chunkCount);
+        });
     }
 
     /**
-     * Encodes spatial position points (both pixel X/Y coordinates and Grid Column/Row coordinates)
+     * Encodes spatial position points
      * @param name The identification key name for this encode, eg: "myPosition"
-     * @param pixelX Horizontal screen position coordinate, eg: 80
-     * @param pixelY Vertical screen position coordinate, eg: 60
-     * @param tileCol Horizontal grid tile column coordinate, eg: 5
-     * @param tileRow Vertical grid tile row coordinate, eg: 3
      */
     //% group="Encoders"
     //% block="Encode position %name with pixel x %pixelX y %pixelY tile col %tileCol row %tileRow"
@@ -153,7 +151,6 @@ namespace settingsDecoder {
         if (!settings.exists(TYPE_PREFIX + name)) return null;
         let type = settings.readString(TYPE_PREFIX + name);
 
-        // 1. Decode Image Type
         if (type == "image") {
             let dimKey = "sd_img_dim_" + name;
             let colKey = "sd_img_col_" + name;
@@ -162,20 +159,16 @@ namespace settingsDecoder {
             let colors = settings.readNumberArray(colKey);
             if (!dimensions || dimensions.length < 2 || !colors) return null;
 
-            let imgWidth = dimensions[0];
-            let imgHeight = dimensions[1];
-            let decodedImg = image.create(imgWidth, imgHeight);
-
-            for (let y = 0; y < imgHeight; y++) {
-                for (let x = 0; x < imgWidth; x++) {
-                    let idx = (y * imgWidth) + x;
+            let decodedImg = image.create(dimensions[0], dimensions[1]);
+            for (let y = 0; y < dimensions[1]; y++) {
+                for (let x = 0; x < dimensions[0]; x++) {
+                    let idx = (y * dimensions[0]) + x;
                     if (idx < colors.length) decodedImg.setPixel(x, y, colors[idx]);
                 }
             }
             return decodedImg;
         }
 
-        // 2. Decode Universal Array Type (Returns string elements array)
         if (type == "array") {
             let arrKey = "sd_arr_" + name;
             let raw = settings.readString(arrKey);
@@ -183,23 +176,24 @@ namespace settingsDecoder {
             return raw.split("||sd_split||");
         }
 
-        // 3. Decode Tilemap Type (Reconstitutes hex back into a normal layout number array)
         if (type == "tilemap") {
-            let hexKey = "sd_tm_hex_" + name;
-            if (!settings.exists(hexKey)) return [];
-            let hexStr = settings.readString(hexKey);
-            if (!hexStr) return [];
+            let chunkLimitKey = "sd_tm_chunks_" + name;
+            if (!settings.exists(chunkLimitKey)) return [];
 
-            let tileGrid: number[] = [];
-            // Parse the 2-character hexadecimal pairings back into standard numbers
-            for (let i = 0; i < hexStr.length; i += 2) {
-                let hexPair = hexStr.substr(i, 2);
-                tileGrid.push(parseInt(hexPair, 16));
+            let totalChunks = settings.readNumber(chunkLimitKey);
+            let tileGridArray: number[] = [];
+
+            for (let c = 0; c < totalChunks; c++) {
+                let rowBuf = settings.readBuffer("sd_tm_b" + c + "_" + name);
+                if (rowBuf) {
+                    for (let i = 0; i < rowBuf.length; i++) {
+                        tileGridArray.push(rowBuf.getUint8(i));
+                    }
+                }
             }
-            return tileGrid;
+            return tileGridArray;
         }
 
-        // 4. Decode Position Type (Returns array: [pixelX, pixelY, tileCol, tileRow])
         if (type == "position") {
             let posKey = "sd_pos_" + name;
             return settings.readNumberArray(posKey) || [];
@@ -208,13 +202,58 @@ namespace settingsDecoder {
         return null;
     }
 
+    /**
+     * Decodes a saved tilemap structure dynamically while displaying an elegant, visual loading popup
+     * @param name The identification key name of the tilemap encode, eg: "currentLevel"
+     */
+    //% group="Decoders"
+    //% block="Decode tilemap %name with loading popup"
+    //% name.defl="currentLevel"
+    export function decodeTilemapWithPopup(name: string): number[] {
+        let chunkLimitKey = "sd_tm_chunks_" + name;
+        if (!settings.exists(chunkLimitKey)) return [];
+
+        let totalChunks = settings.readNumber(chunkLimitKey);
+        let tileGridArray: number[] = [];
+
+        let modal = sprites.create(image.create(120, 50), SpriteKind.Food);
+        modal.image.fill(11);
+        modal.image.drawRect(2, 2, 116, 46, 1);
+        modal.z = 200;
+
+        for (let c = 0; c < totalChunks; c++) {
+            let rowBuf = settings.readBuffer("sd_tm_b" + c + "_" + name);
+            if (rowBuf) {
+                for (let i = 0; i < rowBuf.length; i++) {
+                    tileGridArray.push(rowBuf.getUint8(i));
+                }
+            }
+
+            let percentage = Math.floor(((c + 1) / totalChunks) * 100);
+
+            modal.image.fill(11);
+            modal.image.drawRect(2, 2, 116, 46, 1);
+            modal.image.print("LOADING MAP...", 24, 10, 1, image.font5);
+            modal.image.drawRect(10, 26, 100, 10, 1);
+
+            if (percentage > 0) {
+                modal.image.fillRect(12, 28, Math.floor(percentage * 0.96), 6, 4);
+            }
+
+            modal.image.print(percentage + "%", 50, 38, 3, image.font5);
+            pause(6);
+        }
+
+        modal.destroy();
+        return tileGridArray;
+    }
+
     // ==========================================
     // SUB-CATEGORY 3: MEMORY MANAGEMENT
     // ==========================================
 
     /**
      * Checks if an encoded item with this custom name exists in the memory
-     * @param name The identification key name to check, eg: "myImage"
      */
     //% group="Memory Management"
     //% block="Encoded value with name %name exists"
@@ -225,7 +264,6 @@ namespace settingsDecoder {
 
     /**
      * Clears a specific Encode permanently out of device memory storage profiles
-     * @param name The identification key name matching the encode to wipe, eg: "myImage"
      */
     //% group="Memory Management"
     //% block="Clear Encode %name"
@@ -236,9 +274,18 @@ namespace settingsDecoder {
         settings.remove("sd_img_dim_" + name);
         settings.remove("sd_img_col_" + name);
         settings.remove("sd_tm_dim_" + name);
-        settings.remove("sd_tm_hex_" + name);
+        settings.remove("sd_tm_chunks_" + name);
         settings.remove("sd_pos_" + name);
         settings.remove("sd_arr_" + name);
+
+        for (let i = 0; i < 256; i++) {
+            let segmentKey = "sd_tm_b" + i + "_" + name;
+            if (settings.exists(segmentKey)) {
+                settings.remove(segmentKey);
+            } else {
+                break;
+            }
+        }
     }
 
     /**
@@ -253,3 +300,32 @@ namespace settingsDecoder {
         }
     }
 }
+
+// ============================================================================
+// SANDBOX INTEGRATED TEST CODE SUITE
+// ============================================================================
+
+let mockMapData = image.create(32, 32);
+for (let y = 0; y < 32; y++) {
+    for (let x = 0; x < 32; x++) {
+        mockMapData.setPixel(x, y, (x + y) % 6);
+    }
+}
+
+settingsDecoder.encodeImage("test_drawing", mockMapData);
+
+settings.writeString("sd_type_level_one", "tilemap");
+settings.writeNumber("sd_tm_chunks_level_one", 32);
+for (let r = 0; r < 32; r++) {
+    let mockBuf = control.createBuffer(32);
+    for (let c = 0; c < 32; c++) {
+        mockBuf.setUint8(c, 3);
+    }
+    settings.writeBuffer("sd_tm_b" + r + "_level_one", mockBuf);
+}
+
+controller.A.onEvent(ControllerButtonEvent.Pressed, function () {
+    scene.setBackgroundColor(2);
+    let decodedData = settingsDecoder.decodeTilemapWithPopup("level_one");
+    music.play(music.melodyPlayable(music.baDing), music.PlaybackMode.UntilDone);
+});
