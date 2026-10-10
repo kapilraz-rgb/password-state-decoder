@@ -57,7 +57,7 @@ namespace settingsDecoder {
     }
 
     /**
-     * Encodes the active tilemap currently running on the game screen into storage
+     * Encodes the active tilemap currently running on the game screen into storage without crashing
      * @param name The identification key name for this tilemap encode, eg: "currentLevel"
      */
     //% group="Encoders"
@@ -66,19 +66,31 @@ namespace settingsDecoder {
     export function encodeCurrentTilemap(name: string): void {
         if (!name) return;
         let scene = game.currentScene();
-        if (!scene || !(scene as any)["tileMap"]) return;
+        if (!scene || !scene.tileMap) return;
 
-        let activeMap = (scene as any)["tileMap"];
-        let rawBuffer = (activeMap as any)["data"] || (activeMap as any)["_data"];
-        if (!rawBuffer) return;
+        let activeMap = scene.tileMap;
+        // Read layers safely using bracket notation fallback to target the layout grid image
+        let mapImage: Image = (activeMap as any)["data"] || (activeMap as any)["_data"];
+        if (!mapImage) return;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
-        settings.writeNumber("sd_tm_scale_" + name, (activeMap as any)["scale"] || 4);
-        settings.writeBuffer("sd_tm_buf_" + name, rawBuffer);
+        settings.writeNumberArray("sd_tm_dim_" + name, [mapImage.width, mapImage.height]);
+
+        let tileGrid: number[] = [];
+        // Flatten the map layout grid by extracting individual tile IDs
+        for (let y = 0; y < mapImage.height; y++) {
+            for (let x = 0; x < mapImage.width; x++) {
+                tileGrid.push(mapImage.getPixel(x, y));
+            }
+            // Memory Release Valve: Yield execution back to the hardware processor 
+            // after every completed horizontal row to prevent memory lockup crashes
+            pause(1);
+        }
+        settings.writeNumberArray("sd_tm_grid_" + name, tileGrid);
     }
 
     /**
-     * Encodes a specific designated tilemap layout grid safely into storage
+     * Encodes a specific designated tilemap layout grid safely into storage without crashing
      * @param name The identification key name for this encode, eg: "myTilemap"
      * @param tilemapData The tilemap asset to save
      */
@@ -89,12 +101,22 @@ namespace settingsDecoder {
     export function encodeTilemap(name: string, tilemapData: tiles.TileMapData): void {
         if (!name || !tilemapData) return;
 
-        let rawBuffer = (tilemapData as any)["data"] || (tilemapData as any)["_data"];
-        if (!rawBuffer) return;
+        // Grab the internal layout layer safely
+        let mapImage: Image = (tilemapData as any)["data"] || (tilemapData as any)["_data"] || (tilemapData as any)["layers"]();
+        if (!mapImage) return;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
-        settings.writeNumber("sd_tm_scale_" + name, (tilemapData as any)["scale"] || 4);
-        settings.writeBuffer("sd_tm_buf_" + name, rawBuffer);
+        settings.writeNumberArray("sd_tm_dim_" + name, [mapImage.width, mapImage.height]);
+
+        let tileGrid: number[] = [];
+        for (let y = 0; y < mapImage.height; y++) {
+            for (let x = 0; x < mapImage.width; x++) {
+                tileGrid.push(mapImage.getPixel(x, y));
+            }
+            // Memory Release Valve: Prevents heavy custom maps from overheating hardware engines
+            pause(1);
+        }
+        settings.writeNumberArray("sd_tm_grid_" + name, tileGrid);
     }
 
     /**
@@ -159,11 +181,10 @@ namespace settingsDecoder {
             return raw.split("||sd_split||");
         }
 
-        // 3. Decode Tilemap Type (Safely extracts the raw layout string map buffer)
+        // 3. Decode Tilemap Type (Returns the flattened numerical grid layout array)
         if (type == "tilemap") {
-            let bufKey = "sd_tm_buf_" + name;
-            if (!settings.exists(bufKey)) return null;
-            return settings.readBuffer(bufKey);
+            let gridKey = "sd_tm_grid_" + name;
+            return settings.readNumberArray(gridKey) || [];
         }
 
         // 4. Decode Position Type (Returns array: [pixelX, pixelY, tileCol, tileRow])
@@ -202,8 +223,8 @@ namespace settingsDecoder {
         settings.remove(TYPE_PREFIX + name);
         settings.remove("sd_img_dim_" + name);
         settings.remove("sd_img_col_" + name);
-        settings.remove("sd_tm_scale_" + name);
-        settings.remove("sd_tm_buf_" + name);
+        settings.remove("sd_tm_dim_" + name);
+        settings.remove("sd_tm_grid_" + name);
         settings.remove("sd_pos_" + name);
         settings.remove("sd_arr_" + name);
     }
