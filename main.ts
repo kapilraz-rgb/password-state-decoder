@@ -1,3 +1,7 @@
+/**
+ * Custom blocks for decoding and managing configuration settings
+ */
+//% color="#54527D" icon="\uf1de" block="Settings Decoder"
 namespace settingsDecoder {
 
     // Internal tracker key prefix to identify what data type is stored in the entry
@@ -41,10 +45,8 @@ namespace settingsDecoder {
     export function encodeAnyArray(name: string, list: any[]): void {
         if (!name || !list) return;
 
-        // Save the overarching variable type
         settings.writeString(TYPE_PREFIX + name, "array");
 
-        // Convert the elements to text strings safely using a classic index loop
         let flatStrings: string[] = [];
         for (let i = 0; i < list.length; i++) {
             flatStrings.push("" + list[i]);
@@ -55,7 +57,28 @@ namespace settingsDecoder {
     }
 
     /**
-     * Encodes a visual tilemap layout grid safely into storage
+     * Encodes the active tilemap currently running on the game screen into storage
+     * @param name The identification key name for this tilemap encode, eg: "currentLevel"
+     */
+    //% group="Encoders"
+    //% block="Encode current tilemap as %name"
+    //% name.defl="currentLevel"
+    export function encodeCurrentTilemap(name: string): void {
+        if (!name) return;
+        let scene = game.currentScene();
+        if (!scene || !(scene as any)["tileMap"]) return;
+
+        let activeMap = (scene as any)["tileMap"];
+        let rawBuffer = (activeMap as any)["data"] || (activeMap as any)["_data"];
+        if (!rawBuffer) return;
+
+        settings.writeString(TYPE_PREFIX + name, "tilemap");
+        settings.writeNumber("sd_tm_scale_" + name, (activeMap as any)["scale"] || 4);
+        settings.writeBuffer("sd_tm_buf_" + name, rawBuffer);
+    }
+
+    /**
+     * Encodes a specific designated tilemap layout grid safely into storage
      * @param name The identification key name for this encode, eg: "myTilemap"
      * @param tilemapData The tilemap asset to save
      */
@@ -66,12 +89,11 @@ namespace settingsDecoder {
     export function encodeTilemap(name: string, tilemapData: tiles.TileMapData): void {
         if (!name || !tilemapData) return;
 
-        // Use property string bypass to safely grab the raw internal layout buffer
-        let rawBuffer = (tilemapData as any)["data"] as Buffer;
+        let rawBuffer = (tilemapData as any)["data"] || (tilemapData as any)["_data"];
         if (!rawBuffer) return;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
-        settings.writeNumber("sd_tm_scale_" + name, tilemapData.scale);
+        settings.writeNumber("sd_tm_scale_" + name, (tilemapData as any)["scale"] || 4);
         settings.writeBuffer("sd_tm_buf_" + name, rawBuffer);
     }
 
@@ -120,10 +142,10 @@ namespace settingsDecoder {
             let imgHeight = dimensions[1];
             let decodedImg = image.create(imgWidth, imgHeight);
 
-            for (let y2 = 0; y2 < imgHeight; y2++) {
-                for (let x2 = 0; x2 < imgWidth; x2++) {
-                    let idx = (y2 * imgWidth) + x2;
-                    if (idx < colors.length) decodedImg.setPixel(x2, y2, colors[idx]);
+            for (let y = 0; y < imgHeight; y++) {
+                for (let x = 0; x < imgWidth; x++) {
+                    let idx = (y * imgWidth) + x;
+                    if (idx < colors.length) decodedImg.setPixel(x, y, colors[idx]);
                 }
             }
             return decodedImg;
@@ -137,17 +159,11 @@ namespace settingsDecoder {
             return raw.split("||sd_split||");
         }
 
-        // 3. Decode Tilemap Type (Returns the compiled TileMapData buffer registry object)
+        // 3. Decode Tilemap Type (Safely extracts the raw layout string map buffer)
         if (type == "tilemap") {
             let bufKey = "sd_tm_buf_" + name;
-            let scaleKey = "sd_tm_scale_" + name;
             if (!settings.exists(bufKey)) return null;
-
-            let storedBuf = settings.readBuffer(bufKey);
-            let storedScale = settings.readNumber(scaleKey) || 4; // Defaults to 16x16 tiles layout (2^4=16)
-
-            // Reconstructs a structural runtime clone map asset
-            return new tiles.TileMapData(storedBuf, image.create(16, 16), [], storedScale);
+            return settings.readBuffer(bufKey);
         }
 
         // 4. Decode Position Type (Returns array: [pixelX, pixelY, tileCol, tileRow])
