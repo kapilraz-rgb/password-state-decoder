@@ -57,7 +57,7 @@ namespace settingsDecoder {
     }
 
     /**
-     * Encodes the active tilemap currently running on the game screen into storage without crashing
+     * Encodes the active tilemap currently running on the game screen into storage safely
      * @param name The identification key name for this tilemap encode, eg: "currentLevel"
      */
     //% group="Encoders"
@@ -69,28 +69,30 @@ namespace settingsDecoder {
         if (!scene || !scene.tileMap) return;
 
         let activeMap = scene.tileMap;
-        // Read layers safely using bracket notation fallback to target the layout grid image
+        // Read raw layout tile map safely using bypass bracket notation
         let mapImage: Image = (activeMap as any)["data"] || (activeMap as any)["_data"];
         if (!mapImage) return;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
         settings.writeNumberArray("sd_tm_dim_" + name, [mapImage.width, mapImage.height]);
 
-        let tileGrid: number[] = [];
-        // Flatten the map layout grid by extracting individual tile IDs
+        // Compress numerical IDs into a text stream to bypass memory allocation array crash limits
+        let hexBuilder = "";
         for (let y = 0; y < mapImage.height; y++) {
             for (let x = 0; x < mapImage.width; x++) {
-                tileGrid.push(mapImage.getPixel(x, y));
+                let tileId = mapImage.getPixel(x, y);
+                // Pads values to a strict 2-character hex slot (Supports tile IDs up to 255)
+                let hexStr = "00" + tileId.toString();
+                hexBuilder += hexStr.substr(hexStr.length - 2, 2);
             }
-            // Memory Release Valve: Yield execution back to the hardware processor 
-            // after every completed horizontal row to prevent memory lockup crashes
+            // Memory release valve to avoid locking up hardware frame loops
             pause(1);
         }
-        settings.writeNumberArray("sd_tm_grid_" + name, tileGrid);
+        settings.writeString("sd_tm_hex_" + name, hexBuilder);
     }
 
     /**
-     * Encodes a specific designated tilemap layout grid safely into storage without crashing
+     * Encodes a specific designated tilemap layout grid safely into storage
      * @param name The identification key name for this encode, eg: "myTilemap"
      * @param tilemapData The tilemap asset to save
      */
@@ -101,22 +103,22 @@ namespace settingsDecoder {
     export function encodeTilemap(name: string, tilemapData: tiles.TileMapData): void {
         if (!name || !tilemapData) return;
 
-        // Grab the internal layout layer safely
         let mapImage: Image = (tilemapData as any)["data"] || (tilemapData as any)["_data"] || (tilemapData as any)["layers"]();
         if (!mapImage) return;
 
         settings.writeString(TYPE_PREFIX + name, "tilemap");
         settings.writeNumberArray("sd_tm_dim_" + name, [mapImage.width, mapImage.height]);
 
-        let tileGrid: number[] = [];
+        let hexBuilder = "";
         for (let y = 0; y < mapImage.height; y++) {
             for (let x = 0; x < mapImage.width; x++) {
-                tileGrid.push(mapImage.getPixel(x, y));
+                let tileId = mapImage.getPixel(x, y);
+                let hexStr = "00" + tileId.toString();
+                hexBuilder += hexStr.substr(hexStr.length - 2, 2);
             }
-            // Memory Release Valve: Prevents heavy custom maps from overheating hardware engines
             pause(1);
         }
-        settings.writeNumberArray("sd_tm_grid_" + name, tileGrid);
+        settings.writeString("sd_tm_hex_" + name, hexBuilder);
     }
 
     /**
@@ -181,10 +183,20 @@ namespace settingsDecoder {
             return raw.split("||sd_split||");
         }
 
-        // 3. Decode Tilemap Type (Returns the flattened numerical grid layout array)
+        // 3. Decode Tilemap Type (Reconstitutes hex back into a normal layout number array)
         if (type == "tilemap") {
-            let gridKey = "sd_tm_grid_" + name;
-            return settings.readNumberArray(gridKey) || [];
+            let hexKey = "sd_tm_hex_" + name;
+            if (!settings.exists(hexKey)) return [];
+            let hexStr = settings.readString(hexKey);
+            if (!hexStr) return [];
+
+            let tileGrid: number[] = [];
+            // Parse the 2-character hexadecimal pairings back into standard numbers
+            for (let i = 0; i < hexStr.length; i += 2) {
+                let hexPair = hexStr.substr(i, 2);
+                tileGrid.push(parseInt(hexPair, 16));
+            }
+            return tileGrid;
         }
 
         // 4. Decode Position Type (Returns array: [pixelX, pixelY, tileCol, tileRow])
@@ -224,7 +236,7 @@ namespace settingsDecoder {
         settings.remove("sd_img_dim_" + name);
         settings.remove("sd_img_col_" + name);
         settings.remove("sd_tm_dim_" + name);
-        settings.remove("sd_tm_grid_" + name);
+        settings.remove("sd_tm_hex_" + name);
         settings.remove("sd_pos_" + name);
         settings.remove("sd_arr_" + name);
     }
