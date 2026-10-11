@@ -2,7 +2,7 @@
 // SETTINGS DECODER SUITE EXTENSION
 // ==========================================
 
-//% color="#2d7cd6" icon="\uf0ac" block="Settings Decoder"
+//% color="#e91e63" icon="\uf1de" block="Settings Decoder"
 namespace settingsDecoder {
     let percentLoaded = 0;
     let isLoading = false;
@@ -21,11 +21,98 @@ namespace settingsDecoder {
         screen.print(percentLoaded + "%", 70, 96, 6, image.font5);
     }
 
+    // ==========================================
+    // 1. IMAGE ENCODERS & DECODERS
+    // ==========================================
+
+    /**
+     * Encode an image asset into a text string registry record
+     */
+    //% block="Encode image $img as record $name"
+    //% group="Images"
+    export function encodeImage(img: Image, name: string): void {
+        if (!img) return;
+        let w = img.width;
+        let h = img.height;
+        let serialized = w + "," + h + ",";
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                serialized += img.getPixel(x, y) + ",";
+            }
+        }
+        settings.writeString("IMG_" + name, serialized);
+    }
+
+    /**
+     * Decode an image asset from a text string registry record
+     */
+    //% block="Decode image from record $name"
+    //% group="Images"
+    export function decodeImage(name: string): Image {
+        let rawData = settings.readString("IMG_" + name);
+        if (!rawData) return image.create(16, 16);
+
+        let segments = rawData.split(",");
+        let w = parseInt(segments[0]);
+        let h = parseInt(segments[1]);
+        let img = image.create(w, h);
+
+        let offset = 2;
+        for (let i = 0; i < w * h; i++) {
+            if (i + offset >= segments.length) break;
+            let val = parseInt(segments[i + offset]);
+            let x = i % w;
+            let y = Math.floor(i / w);
+            img.setPixel(x, y, val);
+        }
+        return img;
+    }
+
+    // ==========================================
+    // 2. LOCATION / COORDINATE ENCODERS & DECODERS
+    // ==========================================
+
+    /**
+     * Encode a list of coordinate numbers into a text string registry record
+     */
+    //% block="Encode layout coordinate list $coords as $name"
+    //% group="Locations"
+    export function encodeCoordinates(coords: number[], name: string): void {
+        if (!coords || coords.length == 0) return;
+        let serialized = "";
+        for (let i = 0; i < coords.length; i++) {
+            serialized += coords[i] + ",";
+        }
+        settings.writeString("LOC_" + name, serialized);
+    }
+
+    /**
+     * Decode a list of coordinate numbers from a text string registry record
+     */
+    //% block="Decode layout coordinate list $name"
+    //% group="Locations"
+    export function decodeCoordinates(name: string): number[] {
+        let rawData = settings.readString("LOC_" + name);
+        if (!rawData) return [];
+
+        let segments = rawData.split(",");
+        let coords: number[] = [];
+        for (let i = 0; i < segments.length; i++) {
+            if (segments[i].length == 0) continue;
+            coords.push(parseInt(segments[i]));
+        }
+        return coords;
+    }
+
+    // ==========================================
+    // 3. TILEMAP ENCODERS & DECODERS
+    // ==========================================
+
     /**
      * Encode current tilemap matrix cleanly into flash registry settings strings
      */
     //% block="Encode current tilemap as $name"
-    //% group="Encoders"
+    //% group="Tilemaps"
     export function encodeCurrentTilemap(name: string): void {
         let scene = game.currentScene();
         let tm = scene.tileMap;
@@ -50,7 +137,6 @@ namespace settingsDecoder {
                 serializedData += tileIndex + ",";
             }
         }
-
         settings.writeString("TM_" + name, serializedData);
     }
 
@@ -58,7 +144,7 @@ namespace settingsDecoder {
      * Decode tilemap strings back into native engine TileMapData instances
      */
     //% block="Decode tilemap $name with loading popup"
-    //% group="Decoders"
+    //% group="Tilemaps"
     export function decodeTilemapWithPopup(name: string): tiles.TileMapData {
         let rawData = settings.readString("TM_" + name);
 
@@ -71,8 +157,6 @@ namespace settingsDecoder {
         }
 
         let dataSegments = rawData.split(",");
-
-        // FIXED LINES 76 & 77: Targeted the exact array elements instead of passing the full array
         let w = parseInt(dataSegments[0]);
         let h = parseInt(dataSegments[1]);
 
@@ -119,6 +203,10 @@ namespace settingsDecoder {
         );
     }
 
+    // ==========================================
+    // 4. GENERAL SYSTEM MEMORY MANAGEMENT
+    // ==========================================
+
     /**
      * Clear specific memory profiles tied to tag target names
      */
@@ -126,17 +214,21 @@ namespace settingsDecoder {
     //% group="Memory Management"
     export function clearEncode(name: string): void {
         settings.remove("TM_" + name);
+        settings.remove("IMG_" + name);
+        settings.remove("LOC_" + name);
     }
 
     /**
      * Reset complete system registry layout configuration entries
      */
-    //% block="Clear All Encoded Tilemaps"
+    //% block="Clear All Encoded Assets"
     //% group="Memory Management"
     export function clearAll(): void {
-        let keys = settings.list("TM_");
-        for (let k of keys) {
-            settings.remove(k);
-        }
+        let tmKeys = settings.list("TM_");
+        for (let k of tmKeys) settings.remove(k);
+        let imgKeys = settings.list("IMG_");
+        for (let k of imgKeys) settings.remove(k);
+        let locKeys = settings.list("LOC_");
+        for (let k of locKeys) settings.remove(k);
     }
 }
