@@ -11,6 +11,7 @@ enum LocationMode {
 }
 
 //% color="#e91e63" icon="\uf1de" block="Settings Decoder"
+//% advanced=false
 namespace settingsDecoder {
     let percentLoaded = 0;
     let isLoading = false;
@@ -63,9 +64,12 @@ namespace settingsDecoder {
         if (!rawData) return image.create(16, 16);
 
         let segments = rawData.split(",");
-        // FIXED LINE 66: Removed string conditional evaluation from index array bracket targeting 
-        let w = parseInt(segments[0]);
-        let h = parseInt(segments[1]);
+        if (segments.length < 2) return image.create(16, 16);
+
+        let wStr = segments[0];
+        let hStr = segments[1];
+        let w = parseInt(wStr);
+        let h = parseInt(hStr);
         let img = image.create(w, h);
 
         let offset = 2;
@@ -163,8 +167,12 @@ namespace settingsDecoder {
         if (!rawData) return image.create(16, 16);
 
         let dataSegments = rawData.split(",");
-        let w = parseInt(dataSegments[0]);
-        let h = parseInt(dataSegments[1]);
+        if (dataSegments.length < 2) return image.create(16, 16);
+
+        let wStr = dataSegments[0];
+        let hStr = dataSegments[1];
+        let w = parseInt(wStr);
+        let h = parseInt(hStr);
 
         let layersImage = image.create(w, h);
 
