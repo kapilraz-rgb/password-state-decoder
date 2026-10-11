@@ -11,7 +11,6 @@ enum LocationMode {
 }
 
 //% color="#e91e63" icon="\uf1de" block="Settings Decoder"
-//% advanced=false
 namespace settingsDecoder {
     let percentLoaded = 0;
     let isLoading = false;
@@ -37,10 +36,10 @@ namespace settingsDecoder {
     /**
      * Encode an image asset into a text string registry record
      */
-    //% block="encode image $img=screen as record $imageName"
+    //% block="encode image $img=screen as record $name"
     //% group="Images"
     //% weight=100
-    export function encodeImage(img: Image, imageName: string): void {
+    export function encodeImage(img: Image, name: string): void {
         if (!img) return;
         let w = img.width;
         let h = img.height;
@@ -50,32 +49,32 @@ namespace settingsDecoder {
                 serialized += convertToText(img.getPixel(x, y)) + ",";
             }
         }
-        settings.writeString("IMG_" + imageName, serialized);
+        settings.writeString("IMG_" + name, serialized);
     }
 
     /**
      * Decode an image asset from a text string registry record (Universal Reporter Block)
      */
-    //% block="decode image from record $decodeImgName"
+    //% block="decode image from record $name"
     //% group="Images"
     //% weight=90
-    export function decodeImage(decodeImgName: string): Image {
-        let rawData = settings.readString("IMG_" + decodeImgName);
+    export function decodeImage(name: string): Image {
+        let rawData = settings.readString("IMG_" + name);
         if (!rawData) return image.create(16, 16);
 
         let segments = rawData.split(",");
         if (segments.length < 2) return image.create(16, 16);
 
-        let wStr = segments[0];
-        let hStr = segments[1];
+        // FIXED: Using array shifting to completely bypass bracket lookup errors in blocks view
+        let wStr = segments.shift();
+        let hStr = segments.shift();
         let w = parseInt(wStr);
         let h = parseInt(hStr);
         let img = image.create(w, h);
 
-        let offset = 2;
         for (let i = 0; i < w * h; i++) {
-            if (i + offset >= segments.length) break;
-            let val = parseInt(segments[i + offset]);
+            if (i >= segments.length) break;
+            let val = parseInt(segments[i]);
             let x = i % w;
             let y = Math.floor(i / w);
             img.setPixel(x, y, val);
@@ -90,10 +89,10 @@ namespace settingsDecoder {
     /**
      * Save target dynamic point data with choice menu configuration profiles
      */
-    //% block="save current location using $mode as $locSaveName"
+    //% block="save current location using $mode as $name"
     //% group="Locations"
     //% weight=80
-    export function saveLocationCoordsMode(mode: LocationMode, locSaveName: string): void {
+    export function saveLocationCoordsMode(mode: LocationMode, name: string): void {
         let xVal = 0;
         let yVal = 0;
         let scene = game.currentScene();
@@ -109,17 +108,17 @@ namespace settingsDecoder {
         }
 
         let serialized = convertToText(xVal) + "," + convertToText(yVal) + ",";
-        settings.writeString("LOC_" + locSaveName, serialized);
+        settings.writeString("LOC_" + name, serialized);
     }
 
     /**
      * Decode a list of coordinate numbers from a text string registry record
      */
-    //% block="decode layout coordinate list $locDecodeName"
+    //% block="decode layout coordinate list $name"
     //% group="Locations"
     //% weight=70
-    export function decodeCoordinates(locDecodeName: string): number[] {
-        let rawData = settings.readString("LOC_" + locDecodeName);
+    export function decodeCoordinates(name: string): number[] {
+        let rawData = settings.readString("LOC_" + name);
         if (!rawData) return [];
 
         let segments = rawData.split(",");
@@ -138,10 +137,10 @@ namespace settingsDecoder {
     /**
      * Encode a raw layer image layout out into flash registry settings strings
      */
-    //% block="encode tilemap image data $tmMap=screen as $tilemapSaveName"
+    //% block="encode tilemap image data $tmMap=screen as $name"
     //% group="Tilemaps"
     //% weight=60
-    export function encodeTilemapImage(tmMap: Image, tilemapSaveName: string): void {
+    export function encodeTilemapImage(tmMap: Image, name: string): void {
         if (!tmMap) return;
         let w = tmMap.width;
         let h = tmMap.height;
@@ -153,24 +152,25 @@ namespace settingsDecoder {
                 serializedData += convertToText(tileIndex) + ",";
             }
         }
-        settings.writeString("TM_" + tilemapSaveName, serializedData);
+        settings.writeString("TM_" + name, serializedData);
     }
 
     /**
      * Decode tilemap strings back into a clean Image canvas structure format
      */
-    //% block="decode tilemap $tilemapDecodeName with loading popup"
+    //% block="decode tilemap $name with loading popup"
     //% group="Tilemaps"
     //% weight=50
-    export function decodeTilemapWithPopup(tilemapDecodeName: string): Image {
-        let rawData = settings.readString("TM_" + tilemapDecodeName);
+    export function decodeTilemapWithPopup(name: string): Image {
+        let rawData = settings.readString("TM_" + name);
         if (!rawData) return image.create(16, 16);
 
         let dataSegments = rawData.split(",");
         if (dataSegments.length < 2) return image.create(16, 16);
 
-        let wStr = dataSegments[0];
-        let hStr = dataSegments[1];
+        // FIXED: Cleaned array parsing layout patterns to guarantee visual block generation
+        let wStr = dataSegments.shift();
+        let hStr = dataSegments.shift();
         let w = parseInt(wStr);
         let h = parseInt(hStr);
 
@@ -180,13 +180,12 @@ namespace settingsDecoder {
         percentLoaded = 0;
         game.currentScene().eventContext.registerFrameHandler(95, drawProgressUI);
 
-        let dataOffset = 2;
         let totalTiles = w * h;
 
         for (let i = 0; i < totalTiles; i++) {
-            if (i + dataOffset >= dataSegments.length) break;
+            if (i >= dataSegments.length) break;
 
-            let val = parseInt(dataSegments[i + dataOffset]);
+            let val = parseInt(dataSegments[i]);
             let col = i % w;
             let row = Math.floor(i / w);
             layersImage.setPixel(col, row, val);
@@ -210,13 +209,13 @@ namespace settingsDecoder {
     /**
      * Clear specific memory profiles tied to tag target names
      */
-    //% block="clear encode data $clearTargetName"
+    //% block="clear encode data $name"
     //% group="Memory Management"
     //% weight=40
-    export function clearEncode(clearTargetName: string): void {
-        settings.remove("TM_" + clearTargetName);
-        settings.remove("IMG_" + clearTargetName);
-        settings.remove("LOC_" + clearTargetName);
+    export function clearEncode(name: string): void {
+        settings.remove("TM_" + name);
+        settings.remove("IMG_" + name);
+        settings.remove("LOC_" + name);
     }
 
     /**
