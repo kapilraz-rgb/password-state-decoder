@@ -2,6 +2,14 @@
 // SETTINGS DECODER SUITE EXTENSION
 // ==========================================
 
+// Custom dropdown mode options for position tracking
+enum LocationMode {
+    //% block="Player Position (X,Y)"
+    PlayerPosition = 1,
+    //% block="Tile Location (Col,Row)"
+    TileLocation = 2
+}
+
 //% color="#e91e63" icon="\uf1de" block="Settings Decoder"
 namespace settingsDecoder {
     let percentLoaded = 0;
@@ -28,23 +36,24 @@ namespace settingsDecoder {
     /**
      * Encode an image asset into a text string registry record
      */
-    //% block="Encode image $img as record $name"
+    //% block="Encode image $img=screen as record $name"
     //% group="Images"
     export function encodeImage(img: Image, name: string): void {
         if (!img) return;
         let w = img.width;
         let h = img.height;
-        let serialized = w + "," + h + ",";
+        let serialized = convertToText(w) + "," + convertToText(h) + ",";
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
-                serialized += img.getPixel(x, y) + ",";
+                // FIXED: Wrapped with convertToText() to block type parsing bugs
+                serialized += convertToText(img.getPixel(x, y)) + ",";
             }
         }
         settings.writeString("IMG_" + name, serialized);
     }
 
     /**
-     * Decode an image asset from a text string registry record
+     * Decode an image asset from a text string registry record (Universal Reporter Block)
      */
     //% block="Decode image from record $name"
     //% group="Images"
@@ -73,16 +82,27 @@ namespace settingsDecoder {
     // ==========================================
 
     /**
-     * Encode a list of coordinate numbers into a text string registry record
+     * Save target dynamic point data with choice menu configuration profiles
      */
-    //% block="Encode layout coordinate list $coords as $name"
+    //% block="Save current location using $mode as $name"
     //% group="Locations"
-    export function encodeCoordinates(coords: number[], name: string): void {
-        if (!coords || coords.length == 0) return;
-        let serialized = "";
-        for (let i = 0; i < coords.length; i++) {
-            serialized += coords[i] + ",";
+    export function saveLocationCoordsMode(mode: LocationMode, name: string): void {
+        let xVal = 0;
+        let yVal = 0;
+        let scene = game.currentScene();
+
+        if (mode === LocationMode.PlayerPosition) {
+            xVal = scene.camera ? scene.camera.offsetX + 80 : 0;
+            yVal = scene.camera ? scene.camera.offsetY + 60 : 0;
+        } else if (mode === LocationMode.TileLocation) {
+            let pixelX = scene.camera ? scene.camera.offsetX + 80 : 0;
+            let pixelY = scene.camera ? scene.camera.offsetY + 60 : 0;
+            xVal = Math.floor(pixelX / 16);
+            yVal = Math.floor(pixelY / 16);
         }
+
+        // FIXED: Replaced standard string concatenation with safe explicit text conversions
+        let serialized = convertToText(xVal) + "," + convertToText(yVal) + ",";
         settings.writeString("LOC_" + name, serialized);
     }
 
@@ -109,69 +129,40 @@ namespace settingsDecoder {
     // ==========================================
 
     /**
-     * Encode current tilemap matrix cleanly into flash registry settings strings
+     * Encode a raw layer image layout out into flash registry settings strings
      */
-    //% block="Encode current tilemap as $name"
+    //% block="Encode tilemap image data $tmMap=screen as $name"
     //% group="Tilemaps"
-    export function encodeCurrentTilemap(name: string): void {
-        let scene = game.currentScene();
-        let tm = scene.tileMap;
-        if (!tm) return;
-
-        let data = (tm as any).data;
-        if (!data) return;
-
-        let w = data.width;
-        let h = data.height;
-        let serializedData = w + "," + h + ",";
+    export function encodeTilemapImage(tmMap: Image, name: string): void {
+        if (!tmMap) return;
+        let w = tmMap.width;
+        let h = tmMap.height;
+        let serializedData = convertToText(w) + "," + convertToText(h) + ",";
 
         for (let row = 0; row < h; row++) {
             for (let col = 0; col < w; col++) {
-                let tileLoc = tiles.getTileLocation(col, row);
-                let tileImg = tiles.getTileImage(tileLoc);
-
-                let tileIndex = 0;
-                if (tileImg) {
-                    tileIndex = tileImg.getPixel(0, 0) + 1;
-                }
-                serializedData += tileIndex + ",";
+                let tileIndex = tmMap.getPixel(col, row);
+                // FIXED: Wrapped numeric values with convertToText() to ensure a perfect 0 errors build
+                serializedData += convertToText(tileIndex) + ",";
             }
         }
         settings.writeString("TM_" + name, serializedData);
     }
 
     /**
-     * Decode tilemap strings back into native engine TileMapData instances
+     * Decode tilemap strings back into a clean Image canvas structure format
      */
     //% block="Decode tilemap $name with loading popup"
     //% group="Tilemaps"
-    export function decodeTilemapWithPopup(name: string): tiles.TileMapData {
+    export function decodeTilemapWithPopup(name: string): Image {
         let rawData = settings.readString("TM_" + name);
-
-        if (!rawData) {
-            let fallbackBuf = control.createBuffer(8);
-            fallbackBuf.setNumber(NumberFormat.Int16LE, 0, 2);
-            fallbackBuf.setNumber(NumberFormat.Int16LE, 2, 2);
-            let emptyImg = image.create(16, 16);
-            return new tiles.TileMapData(fallbackBuf, emptyImg, [], TileScale.Sixteen);
-        }
+        if (!rawData) return image.create(16, 16);
 
         let dataSegments = rawData.split(",");
         let w = parseInt(dataSegments[0]);
         let h = parseInt(dataSegments[1]);
 
-        let mapDataBuffer = control.createBuffer(4 + (w * h));
-        mapDataBuffer.setNumber(NumberFormat.Int16LE, 0, w);
-        mapDataBuffer.setNumber(NumberFormat.Int16LE, 2, h);
-
         let layersImage = image.create(w, h);
-        let tilePaletteList: Image[] = [];
-
-        for (let p = 0; p < 16; p++) {
-            let pImg = image.create(16, 16);
-            pImg.fill(p);
-            tilePaletteList.push(pImg);
-        }
 
         isLoading = true;
         percentLoaded = 0;
@@ -184,7 +175,9 @@ namespace settingsDecoder {
             if (i + dataOffset >= dataSegments.length) break;
 
             let val = parseInt(dataSegments[i + dataOffset]);
-            mapDataBuffer[4 + i] = val;
+            let col = i % w;
+            let row = Math.floor(i / w);
+            layersImage.setPixel(col, row, val);
 
             if (i % w == 0) {
                 percentLoaded = Math.floor((i / totalTiles) * 100);
@@ -195,12 +188,7 @@ namespace settingsDecoder {
         percentLoaded = 100;
         isLoading = false;
 
-        return new tiles.TileMapData(
-            mapDataBuffer,
-            layersImage,
-            tilePaletteList,
-            TileScale.Sixteen
-        );
+        return layersImage;
     }
 
     // ==========================================
