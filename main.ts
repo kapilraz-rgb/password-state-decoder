@@ -38,6 +38,7 @@ namespace settingsDecoder {
      */
     //% block="encode image $img=screen as record $imageName"
     //% group="Images"
+    //% weight=100
     export function encodeImage(img: Image, imageName: string): void {
         if (!img) return;
         let w = img.width;
@@ -56,6 +57,7 @@ namespace settingsDecoder {
      */
     //% block="decode image from record $decodeImgName"
     //% group="Images"
+    //% weight=90
     export function decodeImage(decodeImgName: string): Image {
         let rawData = settings.readString("IMG_" + decodeImgName);
         if (!rawData) return image.create(16, 16);
@@ -85,6 +87,7 @@ namespace settingsDecoder {
      */
     //% block="save current location using $mode as $locSaveName"
     //% group="Locations"
+    //% weight=80
     export function saveLocationCoordsMode(mode: LocationMode, locSaveName: string): void {
         let xVal = 0;
         let yVal = 0;
@@ -109,6 +112,7 @@ namespace settingsDecoder {
      */
     //% block="decode layout coordinate list $locDecodeName"
     //% group="Locations"
+    //% weight=70
     export function decodeCoordinates(locDecodeName: string): number[] {
         let rawData = settings.readString("LOC_" + locDecodeName);
         if (!rawData) return [];
@@ -131,6 +135,7 @@ namespace settingsDecoder {
      */
     //% block="encode tilemap image data $tmMap=screen as $tilemapSaveName"
     //% group="Tilemaps"
+    //% weight=60
     export function encodeTilemapImage(tmMap: Image, tilemapSaveName: string): void {
         if (!tmMap) return;
         let w = tmMap.width;
@@ -151,6 +156,7 @@ namespace settingsDecoder {
      */
     //% block="decode tilemap $tilemapDecodeName with loading popup"
     //% group="Tilemaps"
+    //% weight=50
     export function decodeTilemapWithPopup(tilemapDecodeName: string): Image {
         let rawData = settings.readString("TM_" + tilemapDecodeName);
         if (!rawData) return image.create(16, 16);
@@ -190,13 +196,14 @@ namespace settingsDecoder {
 
     // ==========================================
     // 4. GENERAL SYSTEM MEMORY MANAGEMENT
-    // =% block="clear encode data $clearTargetName"
-    // =% group="Memory Management"
     // ==========================================
 
     /**
      * Clear specific memory profiles tied to tag target names
      */
+    //% block="clear encode data $clearTargetName"
+    //% group="Memory Management"
+    //% weight=40
     export function clearEncode(clearTargetName: string): void {
         settings.remove("TM_" + clearTargetName);
         settings.remove("IMG_" + clearTargetName);
@@ -208,6 +215,7 @@ namespace settingsDecoder {
      */
     //% block="clear all encoded assets"
     //% group="Memory Management"
+    //% weight=30
     export function clearAll(): void {
         let tmKeys = settings.list("TM_");
         for (let k of tmKeys) settings.remove(k);
