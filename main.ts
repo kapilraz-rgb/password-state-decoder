@@ -2,7 +2,7 @@
 // SETTINGS DECODER SUITE EXTENSION
 // ==========================================
 
-// Custom dropdown mode options for position tracking
+// Custom dropdown mode choices for location tracking blocks
 enum LocationMode {
     //% block="Player Position (X,Y)"
     PlayerPosition = 1,
@@ -63,6 +63,7 @@ namespace settingsDecoder {
         if (!rawData) return image.create(16, 16);
 
         let segments = rawData.split(",");
+        // FIXED LINE 66: Removed string conditional evaluation from index array bracket targeting 
         let w = parseInt(segments[0]);
         let h = parseInt(segments[1]);
         let img = image.create(w, h);
