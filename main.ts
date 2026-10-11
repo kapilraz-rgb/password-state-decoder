@@ -36,29 +36,28 @@ namespace settingsDecoder {
     /**
      * Encode an image asset into a text string registry record
      */
-    //% block="Encode image $img=screen as record $name"
+    //% block="encode image $img=screen as record $imageName"
     //% group="Images"
-    export function encodeImage(img: Image, name: string): void {
+    export function encodeImage(img: Image, imageName: string): void {
         if (!img) return;
         let w = img.width;
         let h = img.height;
         let serialized = convertToText(w) + "," + convertToText(h) + ",";
         for (let y = 0; y < h; y++) {
             for (let x = 0; x < w; x++) {
-                // FIXED: Wrapped with convertToText() to block type parsing bugs
                 serialized += convertToText(img.getPixel(x, y)) + ",";
             }
         }
-        settings.writeString("IMG_" + name, serialized);
+        settings.writeString("IMG_" + imageName, serialized);
     }
 
     /**
      * Decode an image asset from a text string registry record (Universal Reporter Block)
      */
-    //% block="Decode image from record $name"
+    //% block="decode image from record $decodeImgName"
     //% group="Images"
-    export function decodeImage(name: string): Image {
-        let rawData = settings.readString("IMG_" + name);
+    export function decodeImage(decodeImgName: string): Image {
+        let rawData = settings.readString("IMG_" + decodeImgName);
         if (!rawData) return image.create(16, 16);
 
         let segments = rawData.split(",");
@@ -84,9 +83,9 @@ namespace settingsDecoder {
     /**
      * Save target dynamic point data with choice menu configuration profiles
      */
-    //% block="Save current location using $mode as $name"
+    //% block="save current location using $mode as $locSaveName"
     //% group="Locations"
-    export function saveLocationCoordsMode(mode: LocationMode, name: string): void {
+    export function saveLocationCoordsMode(mode: LocationMode, locSaveName: string): void {
         let xVal = 0;
         let yVal = 0;
         let scene = game.currentScene();
@@ -101,18 +100,17 @@ namespace settingsDecoder {
             yVal = Math.floor(pixelY / 16);
         }
 
-        // FIXED: Replaced standard string concatenation with safe explicit text conversions
         let serialized = convertToText(xVal) + "," + convertToText(yVal) + ",";
-        settings.writeString("LOC_" + name, serialized);
+        settings.writeString("LOC_" + locSaveName, serialized);
     }
 
     /**
      * Decode a list of coordinate numbers from a text string registry record
      */
-    //% block="Decode layout coordinate list $name"
+    //% block="decode layout coordinate list $locDecodeName"
     //% group="Locations"
-    export function decodeCoordinates(name: string): number[] {
-        let rawData = settings.readString("LOC_" + name);
+    export function decodeCoordinates(locDecodeName: string): number[] {
+        let rawData = settings.readString("LOC_" + locDecodeName);
         if (!rawData) return [];
 
         let segments = rawData.split(",");
@@ -131,9 +129,9 @@ namespace settingsDecoder {
     /**
      * Encode a raw layer image layout out into flash registry settings strings
      */
-    //% block="Encode tilemap image data $tmMap=screen as $name"
+    //% block="encode tilemap image data $tmMap=screen as $tilemapSaveName"
     //% group="Tilemaps"
-    export function encodeTilemapImage(tmMap: Image, name: string): void {
+    export function encodeTilemapImage(tmMap: Image, tilemapSaveName: string): void {
         if (!tmMap) return;
         let w = tmMap.width;
         let h = tmMap.height;
@@ -142,20 +140,19 @@ namespace settingsDecoder {
         for (let row = 0; row < h; row++) {
             for (let col = 0; col < w; col++) {
                 let tileIndex = tmMap.getPixel(col, row);
-                // FIXED: Wrapped numeric values with convertToText() to ensure a perfect 0 errors build
                 serializedData += convertToText(tileIndex) + ",";
             }
         }
-        settings.writeString("TM_" + name, serializedData);
+        settings.writeString("TM_" + tilemapSaveName, serializedData);
     }
 
     /**
      * Decode tilemap strings back into a clean Image canvas structure format
      */
-    //% block="Decode tilemap $name with loading popup"
+    //% block="decode tilemap $tilemapDecodeName with loading popup"
     //% group="Tilemaps"
-    export function decodeTilemapWithPopup(name: string): Image {
-        let rawData = settings.readString("TM_" + name);
+    export function decodeTilemapWithPopup(tilemapDecodeName: string): Image {
+        let rawData = settings.readString("TM_" + tilemapDecodeName);
         if (!rawData) return image.create(16, 16);
 
         let dataSegments = rawData.split(",");
@@ -193,23 +190,23 @@ namespace settingsDecoder {
 
     // ==========================================
     // 4. GENERAL SYSTEM MEMORY MANAGEMENT
+    // =% block="clear encode data $clearTargetName"
+    // =% group="Memory Management"
     // ==========================================
 
     /**
      * Clear specific memory profiles tied to tag target names
      */
-    //% block="Clear Encode $name"
-    //% group="Memory Management"
-    export function clearEncode(name: string): void {
-        settings.remove("TM_" + name);
-        settings.remove("IMG_" + name);
-        settings.remove("LOC_" + name);
+    export function clearEncode(clearTargetName: string): void {
+        settings.remove("TM_" + clearTargetName);
+        settings.remove("IMG_" + clearTargetName);
+        settings.remove("LOC_" + clearTargetName);
     }
 
     /**
      * Reset complete system registry layout configuration entries
      */
-    //% block="Clear All Encoded Assets"
+    //% block="clear all encoded assets"
     //% group="Memory Management"
     export function clearAll(): void {
         let tmKeys = settings.list("TM_");
