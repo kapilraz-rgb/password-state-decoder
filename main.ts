@@ -2,16 +2,17 @@
 // SETTINGS DECODER SUITE EXTENSION
 // ==========================================
 
-// Custom dropdown mode choices for location tracking blocks
-enum LocationMode {
-    //% block="Player Position (X,Y)"
-    PlayerPosition = 1,
-    //% block="Tile Location (Col,Row)"
-    TileLocation = 2
-}
-
 //% color="#e91e63" icon="\uf1de" block="Settings Decoder"
 namespace settingsDecoder {
+
+    // FIXED: Moved inside the namespace so the block compiler can link it to dropdown loops automatically
+    export enum LocationMode {
+        //% block="Player Position (X,Y)"
+        PlayerPosition = 1,
+        //% block="Tile Location (Col,Row)"
+        TileLocation = 2
+    }
+
     let percentLoaded = 0;
     let isLoading = false;
 
@@ -36,6 +37,7 @@ namespace settingsDecoder {
     /**
      * Encode an image asset into a text string registry record
      */
+    //% blockId=settings_decoder_encode_image
     //% block="encode image $img=screen as record $name"
     //% group="Images"
     //% weight=100
@@ -55,6 +57,7 @@ namespace settingsDecoder {
     /**
      * Decode an image asset from a text string registry record (Universal Reporter Block)
      */
+    //% blockId=settings_decoder_decode_image
     //% block="decode image from record $name"
     //% group="Images"
     //% weight=90
@@ -65,7 +68,6 @@ namespace settingsDecoder {
         let segments = rawData.split(",");
         if (segments.length < 2) return image.create(16, 16);
 
-        // FIXED: Using array shifting to completely bypass bracket lookup errors in blocks view
         let wStr = segments.shift();
         let hStr = segments.shift();
         let w = parseInt(wStr);
@@ -89,6 +91,7 @@ namespace settingsDecoder {
     /**
      * Save target dynamic point data with choice menu configuration profiles
      */
+    //% blockId=settings_decoder_save_location
     //% block="save current location using $mode as $name"
     //% group="Locations"
     //% weight=80
@@ -114,6 +117,7 @@ namespace settingsDecoder {
     /**
      * Decode a list of coordinate numbers from a text string registry record
      */
+    //% blockId=settings_decoder_decode_coordinates
     //% block="decode layout coordinate list $name"
     //% group="Locations"
     //% weight=70
@@ -137,6 +141,7 @@ namespace settingsDecoder {
     /**
      * Encode a raw layer image layout out into flash registry settings strings
      */
+    //% blockId=settings_decoder_encode_tilemap
     //% block="encode tilemap image data $tmMap=screen as $name"
     //% group="Tilemaps"
     //% weight=60
@@ -158,6 +163,7 @@ namespace settingsDecoder {
     /**
      * Decode tilemap strings back into a clean Image canvas structure format
      */
+    //% blockId=settings_decoder_decode_tilemap_popup
     //% block="decode tilemap $name with loading popup"
     //% group="Tilemaps"
     //% weight=50
@@ -168,7 +174,6 @@ namespace settingsDecoder {
         let dataSegments = rawData.split(",");
         if (dataSegments.length < 2) return image.create(16, 16);
 
-        // FIXED: Cleaned array parsing layout patterns to guarantee visual block generation
         let wStr = dataSegments.shift();
         let hStr = dataSegments.shift();
         let w = parseInt(wStr);
@@ -209,6 +214,7 @@ namespace settingsDecoder {
     /**
      * Clear specific memory profiles tied to tag target names
      */
+    //% blockId=settings_decoder_clear_encode
     //% block="clear encode data $name"
     //% group="Memory Management"
     //% weight=40
@@ -221,6 +227,7 @@ namespace settingsDecoder {
     /**
      * Reset complete system registry layout configuration entries
      */
+    //% blockId=settings_decoder_clear_all
     //% block="clear all encoded assets"
     //% group="Memory Management"
     //% weight=30
